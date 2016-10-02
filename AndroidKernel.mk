@@ -92,8 +92,6 @@ mpath=`dirname $$mdpath`; rm -rf $$mpath;\
 fi
 endef
 
-KERNEL_BUILD_STAMP := $(KERNEL_OUT)/.build_stamp
-
 $(KERNEL_OUT):
 	mkdir -p $(KERNEL_OUT)
 
@@ -104,10 +102,72 @@ $(KERNEL_CONFIG): $(KERNEL_OUT)
 			echo $(KERNEL_CONFIG_OVERRIDE) >> $(KERNEL_OUT)/.config; \
 			$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) oldconfig; fi
 
-$(KERNEL_HEADERS_INSTALL) $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_BUILD_STAMP)
-
-$(KERNEL_BUILD_STAMP): $(KERNEL_OUT) $(KERNEL_SRC_DIR)/
+$(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_HEADERS_INSTALL)
 	$(hide) echo "Building kernel..."
+	$(hide) rm -rf $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/dts
+	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(KERNEL_CFLAGS)
+	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(KERNEL_CFLAGS) modules
+	$(MAKE) -C kernel O=../$(KERNEL_OUT) INSTALL_MOD_PATH=../../$(KERNEL_MODULES_INSTALL) INSTALL_MOD_STRIP=1 ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) modules_install
+
+ifeq ($(PRODUCT_SUPPORT_EXFAT), y)
+	@cp -f $(ANDROID_BUILD_TOP)/kernel/tuxera_update.sh $(ANDROID_BUILD_TOP)
+	@sh tuxera_update.sh --target target/lg.d/mobile-msm8992-3.10.84 --use-cache --latest --max-cache-entries 2 --source-dir $(ANDROID_BUILD_TOP)/kernel --output-dir $(ANDROID_BUILD_TOP)/$(KERNEL_OUT) -a --user lg-mobile --pass AumlTsj0ou
+	@tar -xzf tuxera-exfat*.tgz
+	@mkdir -p $(TARGET_OUT_EXECUTABLES)
+	@cp $(ANDROID_BUILD_TOP)/tuxera-exfat*/exfat/kernel-module/texfat.ko $(ANDROID_BUILD_TOP)/$(TARGET_OUT_EXECUTABLES)/../lib/modules/
+	@cp $(ANDROID_BUILD_TOP)/tuxera-exfat*/exfat/tools/* $(TARGET_OUT_EXECUTABLES)
+	perl $(ANDROID_BUILD_TOP)/kernel/scripts/sign-file sha1 $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.priv $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.x509 $(ANDROID_BUILD_TOP)/$(KERNEL_MODULES_OUT)/texfat.ko
+	@rm -f kheaders*.tar.bz2
+	@rm -f tuxera-exfat*.tgz
+	@rm -rf tuxera-exfat*
+	@rm -f tuxera_update.sh
+endif
+
+ifeq ($(TARGET_CARRIER), LGU)
+	perl $(ANDROID_BUILD_TOP)/kernel/scripts/sign-file sha1 $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.priv $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.x509 \
+	$(ANDROID_BUILD_TOP)/device/lge/$(MYDEVICE)/$(TARGET_PRODUCT)/products/operator/apps/LGUPlus_Iwlan/module/$(TARGET_BUILD_VARIANT)/mwlan_aarp.ko \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_MODULES_OUT)/mwlan_aarp.ko
+	perl $(ANDROID_BUILD_TOP)/kernel/scripts/sign-file sha1 $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.priv $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.x509 \
+	$(ANDROID_BUILD_TOP)/device/lge/$(MYDEVICE)/$(TARGET_PRODUCT)/products/operator/apps/LGUPlus_Iwlan/module/$(TARGET_BUILD_VARIANT)/ipsecdrvtl.ko \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_MODULES_OUT)/ipsecdrvtl.ko
+endif
+
+ifeq ($(LGESP_ITSON), yes)
+	perl $(ANDROID_BUILD_TOP)/kernel/scripts/sign-file sha1 \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.priv $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.x509 \
+	$(ANDROID_BUILD_TOP)/device/lge/$(MYDEVICE)/$(TARGET_PRODUCT)/products/itson/systemassets/system/lib/modules/itson_module1.ko \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_MODULES_OUT)/itson_module1.ko
+
+	perl $(ANDROID_BUILD_TOP)/kernel/scripts/sign-file sha1 \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.priv $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.x509 \
+	$(ANDROID_BUILD_TOP)/device/lge/$(MYDEVICE)/$(TARGET_PRODUCT)/products/itson/systemassets/system/lib/modules/itson_module2.ko \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_MODULES_OUT)/itson_module2.ko
+endif
+
+ifeq ($(ITSON_ENABLED), true)
+	@mkdir -p $(ANDROID_BUILD_TOP)/$(ITSON_KERNEL_BUILD_PATH)/build
+	@mkdir -p $(ANDROID_BUILD_TOP)/$(TARGET_OUT)/vendor/itson
+	@cp -r $(ANDROID_BUILD_TOP)/$(ITSON_KERNEL_BUILD_PATH)/$(TARGET_ARCH) $(ANDROID_BUILD_TOP)/$(ITSON_KERNEL_BUILD_PATH)/build
+	@sh $(ANDROID_BUILD_TOP)/$(ITSON_KERNEL_BUILD_PATH)/build/$(TARGET_ARCH)/build-kernel.sh $(KERNEL_CROSS_COMPILE) $(ANDROID_BUILD_TOP)/$(KERNEL_OUT) $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/itson 1500 $(TARGET_BUILD_VARIANT) system $(PLATFORM_VERSION)
+	@cp $(ANDROID_BUILD_TOP)/$(ITSON_KERNEL_BUILD_PATH)/$(TARGET_ARCH)/kernel.api $(ANDROID_BUILD_TOP)/$(TARGET_OUT)/vendor/itson/
+
+	perl  $(ANDROID_BUILD_TOP)/kernel/scripts/sign-file sha1 \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.priv $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.x509 \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/itson/$(TARGET_BUILD_VARIANT)/itson_module1.ko \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_MODULES_OUT)/itson_module1.ko
+
+	perl  $(ANDROID_BUILD_TOP)/kernel/scripts/sign-file sha1 \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.priv $(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/signing_key.x509 \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_OUT)/itson/$(TARGET_BUILD_VARIANT)/itson_module2.ko \
+	$(ANDROID_BUILD_TOP)/$(KERNEL_MODULES_OUT)/itson_module2.ko
+
+	@rm -rf $(ANDROID_BUILD_TOP)/$(ITSON_KERNEL_BUILD_PATH)/build
+endif
+
+	$(mv-modules)
+	$(clean-module-folder)
+
+$(KERNEL_HEADERS_INSTALL): $(KERNEL_OUT)
 	$(hide) if [ ! -z "$(KERNEL_HEADER_DEFCONFIG)" ]; then \
 			$(hide) rm -f ../$(KERNEL_CONFIG); \
 			$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=$(KERNEL_HEADER_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(KERNEL_HEADER_DEFCONFIG); \
@@ -120,14 +180,6 @@ $(KERNEL_BUILD_STAMP): $(KERNEL_OUT) $(KERNEL_SRC_DIR)/
 			echo "Overriding kernel config with '$(KERNEL_CONFIG_OVERRIDE)'"; \
 			echo $(KERNEL_CONFIG_OVERRIDE) >> $(KERNEL_OUT)/.config; \
 			$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) oldconfig; fi
-
-	$(hide) rm -rf $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/dts
-	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(KERNEL_CFLAGS)
-	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(KERNEL_CFLAGS) modules
-	$(MAKE) -C kernel O=../$(KERNEL_OUT) INSTALL_MOD_PATH=../../$(KERNEL_MODULES_INSTALL) INSTALL_MOD_STRIP=1 ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) modules_install
-	$(mv-modules)
-	$(clean-module-folder)
-	$(hide) touch $(KERNEL_HEADERS_INSTALL) $(TARGET_PREBUILT_INT_KERNEL) $(KERNEL_BUILD_STAMP)
 
 kerneltags: $(KERNEL_OUT) $(KERNEL_CONFIG)
 	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) tags

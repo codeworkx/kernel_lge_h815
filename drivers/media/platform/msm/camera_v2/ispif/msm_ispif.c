@@ -49,6 +49,10 @@
 #else
 #define CDBG(fmt, args...) do { } while (0)
 #endif
+int msm_ispif_get_clk_info(struct ispif_device *ispif_dev,
+	struct platform_device *pdev,
+	struct msm_cam_clk_info *ahb_clk_info,
+	struct msm_cam_clk_info *clk_info);
 
 int msm_ispif_get_clk_info(struct ispif_device *ispif_dev,
 	struct platform_device *pdev,
@@ -98,7 +102,6 @@ static int msm_ispif_reset_hw(struct ispif_device *ispif)
 	long timeout = 0;
 	struct clk *reset_clk1[ARRAY_SIZE(ispif_8626_reset_clk_info)];
 	ispif->clk_idx = 0;
-
 	rc = msm_ispif_get_clk_info(ispif, ispif->pdev,
 		ispif_ahb_clk_info, ispif_clk_info);
 	if (rc < 0) {
@@ -134,8 +137,6 @@ static int msm_ispif_reset_hw(struct ispif_device *ispif)
 	/* initiate reset of ISPIF */
 	msm_camera_io_w(ISPIF_RST_CMD_MASK,
 				ispif->base + ISPIF_RST_CMD_ADDR);
-
-
 	timeout = wait_for_completion_timeout(
 			&ispif->reset_complete[VFE0], msecs_to_jiffies(500));
 	CDBG("%s: VFE0 done\n", __func__);
@@ -362,23 +363,23 @@ static void msm_ispif_sel_csid_core(struct ispif_device *ispif,
 	switch (intftype) {
 	case PIX0:
 		data &= ~(BIT(1) | BIT(0));
-		data |= csid;
+		data |= (uint32_t)csid;
 		break;
 	case RDI0:
 		data &= ~(BIT(5) | BIT(4));
-		data |= (csid << 4);
+		data |= (uint32_t)(csid << 4);
 		break;
 	case PIX1:
 		data &= ~(BIT(9) | BIT(8));
-		data |= (csid << 8);
+		data |= (uint32_t)(csid << 8);
 		break;
 	case RDI1:
 		data &= ~(BIT(13) | BIT(12));
-		data |= (csid << 12);
+		data |= (uint32_t)(csid << 12);
 		break;
 	case RDI2:
 		data &= ~(BIT(21) | BIT(20));
-		data |= (csid << 20);
+		data |= (uint32_t)(csid << 20);
 		break;
 	}
 
@@ -454,9 +455,9 @@ static void msm_ispif_enable_intf_cids(struct ispif_device *ispif,
 
 	data = msm_camera_io_r(ispif->base + intf_addr);
 	if (enable)
-		data |= cid_mask;
+		data |= (uint32_t)cid_mask;
 	else
-		data &= ~cid_mask;
+		data &= ~((uint32_t)cid_mask);
 	msm_camera_io_w_mb(data, ispif->base + intf_addr);
 }
 
@@ -867,6 +868,7 @@ static int msm_ispif_restart_frame_boundary(struct ispif_device *ispif,
 	}
 
 	pr_info("%s: ISPIF reset hw done", __func__);
+
 	rc = msm_cam_clk_enable(&ispif->pdev->dev,
 		ispif_clk_info, ispif->clk,
 		ispif->num_clk, 0);
@@ -1133,9 +1135,14 @@ static irqreturn_t msm_io_ispif_irq(int irq_num, void *data)
 static int msm_ispif_set_vfe_info(struct ispif_device *ispif,
 	struct msm_ispif_vfe_info *vfe_info)
 {
-	memcpy(&ispif->vfe_info, vfe_info, sizeof(struct msm_ispif_vfe_info));
-	if (ispif->vfe_info.num_vfe > ispif->hw_num_isps)
+    if (!vfe_info || (vfe_info->num_vfe <= 0) ||
+        ((uint32_t)(vfe_info->num_vfe) > ispif->hw_num_isps)) {
+        pr_err("Invalid VFE info: %p %d\n", vfe_info,
+            (vfe_info ? vfe_info->num_vfe:0));
 		return -EINVAL;
+    }
+    memcpy(&ispif->vfe_info, vfe_info, sizeof(struct msm_ispif_vfe_info));
+
 	return 0;
 }
 
@@ -1191,7 +1198,6 @@ static int msm_ispif_init(struct ispif_device *ispif,
 		pr_err("%s: request_irq error = %d\n", __func__, rc);
 		goto error_irq;
 	}
-
 	msm_ispif_reset_hw(ispif);
 
 	rc = msm_ispif_clk_ahb_enable(ispif, 1);
@@ -1232,8 +1238,12 @@ static void msm_ispif_release(struct ispif_device *ispif)
 	}
 
 	/* make sure no streaming going on */
-	msm_ispif_reset(ispif);
-	msm_ispif_reset_hw(ispif);
+	if (ispif->fs_vfe && regulator_is_enabled(ispif->fs_vfe)) {	//LGE_CHANGE, vdd_vfe to check if vfe is up
+		msm_ispif_reset(ispif);
+		msm_ispif_reset_hw(ispif);
+	} else
+		pr_err("%s: failed to reset. fs_vfe is NULL \n", __func__);
+
 	msm_ispif_clk_ahb_enable(ispif, 0);
 
 	free_irq(ispif->irq->start, ispif);
@@ -1405,7 +1415,6 @@ static int ispif_probe(struct platform_device *pdev)
 		/* not an error condition */
 		rc = 0;
 	}
-
 	rc = msm_ispif_get_clk_info(ispif, pdev,
 		ispif_ahb_clk_info, ispif_clk_info);
 	if (rc < 0) {
@@ -1445,6 +1454,13 @@ static int ispif_probe(struct platform_device *pdev)
 		if (!ispif->clk_mux_io)
 			pr_err("%s: no valid csi_mux region\n", __func__);
 	}
+
+	//LGE_CHANGE_S, vdd_vfe to check if vfe is up
+        ispif->fs_vfe = regulator_get(&pdev->dev, "vdd_vfe");
+
+	if (ispif->fs_vfe == NULL)
+		pr_err("%s: gdsc_vfe is null\n", __func__);
+	//LGE_CHANGE_E, vdd_vfe to check if vfe is up
 
 	v4l2_subdev_init(&ispif->msm_sd.sd, &msm_ispif_subdev_ops);
 	ispif->msm_sd.sd.internal_ops = &msm_ispif_internal_ops;

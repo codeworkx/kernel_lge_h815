@@ -232,6 +232,12 @@ int ecryptfs_initialize_file(struct dentry *ecryptfs_dentry,
 {
 	struct ecryptfs_crypt_stat *crypt_stat =
 		&ecryptfs_inode_to_private(ecryptfs_inode)->crypt_stat;
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	struct ecryptfs_mount_sd_crypt_stat *mount_sd_crypt_stat =
+		&ecryptfs_superblock_to_private(
+			ecryptfs_dentry->d_sb)->mount_sd_crypt_stat;
+	char dentry_name[MAX_FILE_NAME_LENGTH] = {0,};
+#endif
 	int rc = 0;
 
 	if (S_ISDIR(ecryptfs_inode->i_mode)) {
@@ -239,6 +245,26 @@ int ecryptfs_initialize_file(struct dentry *ecryptfs_dentry,
 		crypt_stat->flags &= ~(ECRYPTFS_ENCRYPTED);
 		goto out;
 	}
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	memcpy(dentry_name, ecryptfs_dentry->d_name.name, ecryptfs_dentry->d_name.len);
+	if (mount_sd_crypt_stat && (mount_sd_crypt_stat->flags
+						& ECRYPTFS_MEDIA_EXCEPTION)) {
+		if(ecryptfs_media_file_search(dentry_name)){
+			crypt_stat->flags &= ~(ECRYPTFS_ENCRYPTED);
+			goto out;
+		}
+	}
+
+    if(ecryptfs_asec_file_search(dentry_name)){
+        crypt_stat->flags &= ~(ECRYPTFS_ENCRYPTED);
+        goto out;
+    }
+	if (mount_sd_crypt_stat && (mount_sd_crypt_stat->flags
+			& ECRYPTFS_DECRYPTION_ONLY)) {
+		crypt_stat->flags &= ~(ECRYPTFS_ENCRYPTED);
+		goto out;
+	}
+#endif
 	ecryptfs_printk(KERN_DEBUG, "Initializing crypto context\n");
 	rc = ecryptfs_new_file_context(ecryptfs_inode);
 	if (rc) {

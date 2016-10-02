@@ -140,6 +140,21 @@ enum mdp_mmap_type {
 	MDP_FB_MMAP_PHYSICAL_ALLOC,
 };
 
+/* enum bklt_type - Lists blu type
+ *
+ * @CTRL_BACKLIGHT : Main BLU, in this mode this means PMIC
+ * @CTRL_BACKLIGHT_EX : Extended BLU, in this mode this means LM3697
+ *
+ * It is possible to change with MODEL dep.
+ */
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_DUAL_BACKLIGHT)
+enum bklt_type {
+	// BL_PWM, BL_WLED, BL_DCS_CMD, UNKNOWN_CTRL
+	CTRL_BACKLIGHT_EX,
+	CTRL_BACKLIGHT,
+};
+#endif
+
 struct disp_info_type_suspend {
 	int op_enable;
 	int panel_power_state;
@@ -289,6 +304,14 @@ struct msm_fb_data_type {
 	u32 unset_bl_level;
 	u32 bl_updated;
 	u32 bl_level_scaled;
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_DUAL_BACKLIGHT)
+	int ctrl_bklt;
+
+	u32 bl_level_ex;
+	u32 unset_bl_level_ex;
+	u32 bl_updated_ex;	// need to check
+	u32 bl_level_scaled_ex;
+#endif
 	struct mutex bl_lock;
 
 	struct platform_device *pdev;
@@ -339,6 +362,11 @@ struct msm_fb_data_type {
 	enum dyn_mode_switch_state switch_state;
 	u32 switch_new_mode;
 	struct mutex switch_lock;
+
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_EXTENDED_PANEL)
+	int aod;
+	int fake_u2;
+#endif
 };
 
 static inline void mdss_fb_update_notify_update(struct msm_fb_data_type *mfd)
@@ -410,6 +438,10 @@ static inline bool mdss_fb_is_hdmi_primary(struct msm_fb_data_type *mfd)
 int mdss_fb_get_phys_info(dma_addr_t *start, unsigned long *len, int fb_num);
 void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl);
 void mdss_fb_update_backlight(struct msm_fb_data_type *mfd);
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_DUAL_BACKLIGHT)
+void mdss_fb_set_backlight_ex(struct msm_fb_data_type *mfd, u32 bkl_lvl);
+void mdss_fb_update_backlight_ex(struct msm_fb_data_type *mfd);
+#endif
 int mdss_fb_wait_for_fences(struct msm_sync_pt_data *sync_pt_data,
 	struct sync_fence **fences, int fence_cnt);
 void mdss_fb_copy_fence(struct msm_sync_pt_data *sync_pt_data,

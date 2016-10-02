@@ -195,7 +195,9 @@ static uint32_t bcl_frequency_mask;
 static struct work_struct bcl_hotplug_work;
 static DEFINE_MUTEX(bcl_hotplug_mutex);
 static bool bcl_hotplug_enabled;
+#ifndef CONFIG_LGE_PM
 static uint32_t battery_soc_val = 100;
+#endif
 static uint32_t soc_low_threshold;
 static struct power_supply bcl_psy;
 static const char bcl_psy_name[] = "bcl";
@@ -219,8 +221,12 @@ static void __ref bcl_handle_hotplug(struct work_struct *work)
 	if (cpumask_empty(bcl_cpu_online_mask))
 		bcl_update_online_mask();
 
+#ifndef CONFIG_LGE_PM
 	if  (bcl_soc_state == BCL_LOW_THRESHOLD
 		|| bcl_vph_state == BCL_LOW_THRESHOLD)
+#else
+	if  (bcl_vph_state == BCL_LOW_THRESHOLD)
+#endif
 		bcl_hotplug_request = bcl_soc_hotplug_mask;
 	else if (bcl_ibat_state == BCL_HIGH_THRESHOLD)
 		bcl_hotplug_request = bcl_hotplug_mask;
@@ -269,8 +275,7 @@ static int __ref bcl_cpu_ctrl_callback(struct notifier_block *nfb,
 {
 	uint32_t cpu = (uintptr_t)hcpu;
 
-	switch (action & ~CPU_TASKS_FROZEN) {
-	case CPU_UP_PREPARE:
+	if (action == CPU_UP_PREPARE || action == CPU_UP_PREPARE_FROZEN) {
 		if (!cpumask_test_and_set_cpu(cpu, bcl_cpu_online_mask))
 			pr_debug("BCL online Mask: %u\n",
 				cpumask_weight(bcl_cpu_online_mask));
@@ -280,15 +285,6 @@ static int __ref bcl_cpu_ctrl_callback(struct notifier_block *nfb,
 		} else {
 			pr_debug("voting for CPU%d to be online\n", cpu);
 		}
-		break;
-	case CPU_ONLINE:
-		if (bcl_hotplug_enabled && (bcl_hotplug_request & BIT(cpu))) {
-			pr_debug("CPU%d online. reevaluate hotplug\n", cpu);
-			schedule_work(&bcl_hotplug_work);
-		}
-		break;
-	default:
-		break;
 	}
 
 	return NOTIFY_OK;
@@ -309,9 +305,14 @@ static int bcl_cpufreq_callback(struct notifier_block *nfb,
 
 	switch (event) {
 	case CPUFREQ_INCOMPATIBLE:
+#ifndef CONFIG_LGE_PM
 		if (bcl_vph_state == BCL_LOW_THRESHOLD
 			|| bcl_ibat_state == BCL_HIGH_THRESHOLD
 			|| bcl_soc_state == BCL_LOW_THRESHOLD) {
+#else
+		if (bcl_vph_state == BCL_LOW_THRESHOLD
+			|| bcl_ibat_state == BCL_HIGH_THRESHOLD) {
+#endif
 			max_freq = (gbcl->bcl_monitor_type
 				== BCL_IBAT_MONITOR_TYPE) ? gbcl->btm_freq_max
 				: gbcl->bcl_p_freq_max;
@@ -347,6 +348,7 @@ static void update_cpu_freq(void)
 	put_online_cpus();
 }
 
+#ifndef CONFIG_LGE_PM
 static void power_supply_callback(struct power_supply *psy)
 {
 	static struct power_supply *bms_psy;
@@ -377,6 +379,7 @@ static void power_supply_callback(struct power_supply *psy)
 		update_cpu_freq();
 	}
 }
+#endif
 
 static int bcl_get_battery_voltage(int *vbatt_mv)
 {
@@ -694,7 +697,9 @@ static void bcl_periph_mode_set(enum bcl_device_mode mode)
 		 * power state changes. Make sure we read the current SoC
 		 * and mitigate.
 		 */
+#ifndef CONFIG_LGE_PM
 		power_supply_callback(&bcl_psy);
+#endif
 		ret = power_supply_register(gbcl->dev, &bcl_psy);
 		if (ret < 0) {
 			pr_err("Unable to register bcl_psy rc = %d\n", ret);
@@ -1774,7 +1779,9 @@ static int bcl_probe(struct platform_device *pdev)
 	bcl_psy.get_property     = bcl_battery_get_property;
 	bcl_psy.set_property     = bcl_battery_set_property;
 	bcl_psy.num_properties = 0;
+#ifndef CONFIG_LGE_PM
 	bcl_psy.external_power_changed = power_supply_callback;
+#endif
 
 	gbcl = bcl;
 	platform_set_drvdata(pdev, bcl);

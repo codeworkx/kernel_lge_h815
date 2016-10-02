@@ -182,6 +182,7 @@ int msm_isp_update_bandwidth(enum msm_isp_hw_client client,
 				isp_bandwidth_mgr.client_info[i].ib;
 		}
 	}
+
 	msm_bus_scale_client_update_request(isp_bandwidth_mgr.bus_client,
 		isp_bandwidth_mgr.bus_vector_active_idx);
 	/* Insert into circular buffer */
@@ -1049,7 +1050,7 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 			is_module_cfg_lock_needed(reg_cfg_cmd->
 			u.mask_info.reg_offset);
 		if (grab_lock)
-			spin_lock_irqsave(&vfe_dev->shared_data_lock, flags);
+			spin_lock_irqsave(&vfe_dev->shared_cfg_reg_lock, flags); //LGE_CHANGE, 20150609, Change spin_lock for watchodog case using shard_data_lock, changhwan.kang.kang
 		temp = msm_camera_io_r(vfe_dev->vfe_base +
 			reg_cfg_cmd->u.mask_info.reg_offset);
 
@@ -1058,8 +1059,7 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 		msm_camera_io_w(temp, vfe_dev->vfe_base +
 			reg_cfg_cmd->u.mask_info.reg_offset);
 		if (grab_lock)
-			spin_unlock_irqrestore(&vfe_dev->shared_data_lock,
-				flags);
+			spin_unlock_irqrestore(&vfe_dev->shared_cfg_reg_lock, flags); //LGE_CHANGE, 20150609, Change spin_lock for watchodog case using shard_data_lock, changhwan.kang.kang
 		break;
 	}
 	case VFE_WRITE_DMI_16BIT:
@@ -1556,8 +1556,6 @@ void msm_isp_update_error_frame_count(struct vfe_device *vfe_dev)
 {
 	struct msm_vfe_error_info *error_info = &vfe_dev->error_info;
 	error_info->info_dump_frame_count++;
-	if (error_info->info_dump_frame_count == 0)
-		error_info->info_dump_frame_count++;
 }
 
 
@@ -1574,7 +1572,7 @@ void msm_isp_process_iommu_page_fault(struct vfe_device *vfe_dev)
 
 	msm_isp_axi_halt(vfe_dev, &halt_cmd);
 
-	for (i = 0; i < VFE_AXI_SRC_MAX; i++)
+	for (i = 0; i < MAX_NUM_STREAM; i++)
 		vfe_dev->axi_data.stream_info[i].state = INACTIVE;
 
 	pr_err("%s:%d] vfe_dev %p id %d\n", __func__,
@@ -1668,6 +1666,8 @@ static void msm_isp_process_overflow_irq(
 		*irq_status0 = 0;
 		*irq_status1 = 0;
 
+		memset(&error_event, 0, sizeof(error_event));
+
 		error_event.frame_id =
 			vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id;
 		error_event.u.error_info.err_type = ISP_ERROR_BUS_OVERFLOW;
@@ -1683,8 +1683,7 @@ void msm_isp_reset_burst_count_and_frame_drop(
 		stream_info->stream_type != BURST_STREAM) {
 		return;
 	}
-	if (stream_info->stream_type == BURST_STREAM &&
-		stream_info->num_burst_capture != 0) {
+	if (stream_info->num_burst_capture != 0) {
 		framedrop_period = msm_isp_get_framedrop_period(
 		   stream_info->frame_skip_pattern);
 		stream_info->burst_frame_count =

@@ -662,6 +662,8 @@ int mdss_mdp_cmd_reconfigure_splash_done(struct mdss_mdp_ctl *ctl, bool handoff)
 	return ret;
 }
 
+extern void dump_mdss_reg(void);
+
 static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 {
 	struct mdss_mdp_cmd_ctx *ctx;
@@ -1095,6 +1097,13 @@ int mdss_mdp_cmd_ctx_stop(struct mdss_mdp_ctl *ctl,
 	ctx->intf_stopped = 1;
 	spin_lock_irqsave(&ctx->clk_lock, flags);
 	if (ctx->rdptr_enabled) {
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_EXTENDED_PANEL)
+	if ((ctl->panel_data->panel_info.lge_pan_info.lge_panel_send_off_cmd == false)
+		&& (atomic_read(&ctx->koff_cnt) == 0)){
+			pr_info("%s: no kickoff cnt, no need to wait \n", __func__);
+			mdss_mdp_irq_disable(MDSS_MDP_IRQ_PING_PONG_RD_PTR,ctx->pp_num);
+			ctx->rdptr_enabled = 0;
+	}else {
 		INIT_COMPLETION(ctx->stop_comp);
 		need_wait = 1;
 		/*
@@ -1108,6 +1117,22 @@ int mdss_mdp_cmd_ctx_stop(struct mdss_mdp_ctl *ctl,
 				sctx->rdptr_enabled = 1;
 			spin_unlock_irqrestore(&sctx->clk_lock, sflags);
 		}
+	}
+#else
+		INIT_COMPLETION(ctx->stop_comp);
+		need_wait = 1;
+		/*
+		 * clk off at next vsync after pp_done  OR
+		 * next vsync if there has no kickoff pending
+		 */
+		ctx->rdptr_enabled = 1;
+		if (sctx) {
+			spin_lock_irqsave(&sctx->clk_lock, sflags);
+			if (sctx->rdptr_enabled)
+				sctx->rdptr_enabled = 1;
+			spin_unlock_irqrestore(&sctx->clk_lock, sflags);
+		}
+#endif
 	}
 	spin_unlock_irqrestore(&ctx->clk_lock, flags);
 

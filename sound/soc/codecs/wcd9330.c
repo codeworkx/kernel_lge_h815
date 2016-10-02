@@ -51,8 +51,7 @@ enum {
 	ADC4_TXFE,
 	ADC5_TXFE,
 	ADC6_TXFE,
-	HPH_DELAY_L,
-	HPH_DELAY_R,
+	HPH_DELAY,
 };
 
 #define TOMTOM_MAD_SLIMBUS_TX_PORT 12
@@ -681,8 +680,10 @@ int tomtom_enable_qfuse_sensing(struct snd_soc_codec *codec)
 	 * before checking the status.
 	 */
 	usleep_range(5000, 5500);
-	if ((snd_soc_read(codec, TOMTOM_A_QFUSE_STATUS) & (0x03)) != 0x03)
-		WARN(1, "%s: Qfuse sense is not complete\n", __func__);
+    if ((snd_soc_read(codec, TOMTOM_A_QFUSE_STATUS) & (0x03)) != 0x03) {
+        WARN(1, "%s: Qfuse sense is not complete\n", __func__);
+        return 1;
+    }
 	return 0;
 }
 EXPORT_SYMBOL(tomtom_enable_qfuse_sensing);
@@ -1138,12 +1139,6 @@ static int tomtom_config_compander(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		/* If EAR PA is enabled then compander should not be enabled */
-		if ((snd_soc_read(codec, TOMTOM_A_RX_EAR_EN) & 0x10) != 0) {
-			pr_debug("%s: EAR is enabled, do not enable compander\n",
-				 __func__);
-			break;
-		}
 		/* Set compander Sample rate */
 		snd_soc_update_bits(codec,
 				    TOMTOM_A_CDC_COMP0_FS_CFG + (comp * 8),
@@ -3148,93 +3143,6 @@ done:
 	return dmic_ctl_val;
 }
 
-static u8 tomtom_get_spkdrv_ocp_curr_limit_val(struct snd_soc_codec *codec,
-	u32 spkdrv_ocp_curr_limit)
-{
-	u8 spkdrv_ocp_curr_limit_val;
-
-	dev_dbg(codec->dev,
-		"%s: spkdrv_ocp_curr_limit = %u\n",
-		__func__, spkdrv_ocp_curr_limit);
-
-	switch (spkdrv_ocp_curr_limit) {
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_0P0_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_0P0_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_0P375_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_0P375_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_0P750_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_0P750_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_1P125_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_1P125_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_1P500_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_1P500_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_1P875_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_1P875_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_2P250_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_2P250_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_2P625_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_2P625_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_3P000_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_3P000_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_3P375_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_3P375_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_3P750_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_3P750_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_4P125_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_4P125_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_4P500_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_4P500_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_4P875_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_4P875_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_5P250_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_5P250_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_I_5P625_A:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_5P625_A;
-		break;
-	case WCD9XXX_SPKDRV_OCP_CURR_LIMIT_UNDEFINED:
-	default:
-		spkdrv_ocp_curr_limit_val =
-				WCD9330_SPKDRV_OCP_CURR_LIMIT_I_2P625_A;
-		dev_dbg(codec->dev,
-			"%s: Invalid spkdrv_ocp_curr_limit, using default\n",
-			__func__);
-		break;
-	}
-
-	return spkdrv_ocp_curr_limit_val;
-}
-
 static int tomtom_codec_enable_dmic(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *kcontrol, int event)
 {
@@ -3633,7 +3541,11 @@ static int tomtom_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 		}
 		break;
 	case SND_SOC_DAPM_POST_PMU:
+#ifdef CONFIG_MACH_LGE
+		usleep_range(20000, 20100);
+#else
 		usleep_range(5000, 5100);
+#endif
 		/* Let MBHC module know so micbias is on */
 		wcd9xxx_resmgr_notifier_call(&tomtom->resmgr, e_post_on);
 		break;
@@ -4392,7 +4304,7 @@ static int tomtom_hph_pa_event(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_codec *codec = w->codec;
 	struct tomtom_priv *tomtom = snd_soc_codec_get_drvdata(codec);
-	enum wcd9xxx_notify_event e_pre_on, e_post_off;
+	enum wcd9xxx_notify_event e_pre_on, e_post_off, e_pre_off;
 	u8 req_clsh_state;
 	u32 pa_settle_time = TOMTOM_HPH_PA_SETTLE_COMP_OFF;
 
@@ -4400,10 +4312,12 @@ static int tomtom_hph_pa_event(struct snd_soc_dapm_widget *w,
 	if (w->shift == 5) {
 		e_pre_on = WCD9XXX_EVENT_PRE_HPHL_PA_ON;
 		e_post_off = WCD9XXX_EVENT_POST_HPHL_PA_OFF;
+		e_pre_off = WCD9XXX_EVENT_PRE_HPHL_PA_OFF;
 		req_clsh_state = WCD9XXX_CLSH_STATE_HPHL;
 	} else if (w->shift == 4) {
 		e_pre_on = WCD9XXX_EVENT_PRE_HPHR_PA_ON;
 		e_post_off = WCD9XXX_EVENT_POST_HPHR_PA_OFF;
+		e_pre_off = WCD9XXX_EVENT_PRE_HPHR_PA_OFF;
 		req_clsh_state = WCD9XXX_CLSH_STATE_HPHR;
 	} else {
 		pr_err("%s: Invalid w->shift %d\n", __func__, w->shift);
@@ -4415,42 +4329,21 @@ static int tomtom_hph_pa_event(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		if (w->shift == 5)
-			set_bit(HPH_DELAY_L, &tomtom->status_mask);
-		else if (w->shift == 4)
-			set_bit(HPH_DELAY_R, &tomtom->status_mask);
-		else {
-			pr_err("%s: Invalid w->shift %d\n", __func__,
-				w->shift);
-			return -EINVAL;
-		}
+		set_bit(HPH_DELAY, &tomtom->status_mask);
 		/* Let MBHC module know PA is turning on */
 		wcd9xxx_resmgr_notifier_call(&tomtom->resmgr, e_pre_on);
 		break;
 
 	case SND_SOC_DAPM_POST_PMU:
-		if (test_bit(HPH_DELAY_L, &tomtom->status_mask)) {
+		if (test_bit(HPH_DELAY, &tomtom->status_mask)) {
 			/*
-			 * Make sure to wait 10ms after enabling HPHL
+			 * Make sure to wait 10ms after enabling HPHR_HPHL
 			 * in register 0x1AB
 			*/
 			usleep_range(pa_settle_time, pa_settle_time + 1000);
-			clear_bit(HPH_DELAY_L, &tomtom->status_mask);
+			clear_bit(HPH_DELAY, &tomtom->status_mask);
 			pr_debug("%s: sleep %d us after %s PA enable\n",
 				__func__, pa_settle_time, w->name);
-		} else if (test_bit(HPH_DELAY_R, &tomtom->status_mask)) {
-			/*
-			 * Make sure to wait 10ms after enabling HPHR
-			 * in register 0x1AB
-			*/
-			usleep_range(pa_settle_time, pa_settle_time + 1000);
-			clear_bit(HPH_DELAY_R, &tomtom->status_mask);
-			pr_debug("%s: sleep %d us after %s PA enable\n",
-				__func__, pa_settle_time, w->name);
-		} else {
-			pr_err("%s: Invalid w->shift %d\n", __func__,
-				w->shift);
-			return -EINVAL;
 		}
 		if (!high_perf_mode && !tomtom->uhqa_mode) {
 			wcd9xxx_clsh_fsm(codec, &tomtom->clsh_d,
@@ -4461,42 +4354,21 @@ static int tomtom_hph_pa_event(struct snd_soc_dapm_widget *w,
 		break;
 
 	case SND_SOC_DAPM_PRE_PMD:
-		if (w->shift == 5)
-			set_bit(HPH_DELAY_L, &tomtom->status_mask);
-		else if (w->shift == 4)
-			set_bit(HPH_DELAY_R, &tomtom->status_mask);
-		else {
-			pr_err("%s: Invalid w->shift %d\n", __func__,
-				 w->shift);
-			return -EINVAL;
-		}
+		set_bit(HPH_DELAY, &tomtom->status_mask);
 		break;
 
 	case SND_SOC_DAPM_POST_PMD:
 		/* Let MBHC module know PA turned off */
 		wcd9xxx_resmgr_notifier_call(&tomtom->resmgr, e_post_off);
-		if (test_bit(HPH_DELAY_L, &tomtom->status_mask)) {
+		if (test_bit(HPH_DELAY, &tomtom->status_mask)) {
 			/*
-			 * Make sure to wait 10ms after disabling HPHL
+			 * Make sure to wait 10ms after disabling HPHR_HPHL
 			 * in register 0x1AB
 			*/
 			usleep_range(pa_settle_time, pa_settle_time + 1000);
-			clear_bit(HPH_DELAY_L, &tomtom->status_mask);
+			clear_bit(HPH_DELAY, &tomtom->status_mask);
 			pr_debug("%s: sleep %d us after %s PA disable\n",
 				__func__, pa_settle_time, w->name);
-		} else if (test_bit(HPH_DELAY_R, &tomtom->status_mask)) {
-			/*
-			 * Make sure to wait 10ms after disabling HPHR
-			 * in register 0x1AB
-			*/
-			usleep_range(pa_settle_time, pa_settle_time + 1000);
-			clear_bit(HPH_DELAY_R, &tomtom->status_mask);
-			pr_debug("%s: sleep %d us after %s PA disable\n",
-				__func__, pa_settle_time, w->name);
-		} else {
-			pr_err("%s: Invalid w->shift %d\n", __func__,
-				 w->shift);
-			return -EINVAL;
 		}
 
 		break;
@@ -6647,21 +6519,6 @@ static int tomtom_codec_ear_dac_event(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		/*
-		 * When EAR is enabled, compander (1) in HPH path should be
-		 * disabled, and gain source for HPH set to register
-		 */
-		if ((snd_soc_read(codec, TOMTOM_A_CDC_COMP1_B1_CTL) &
-				  0x03) != 0) {
-			pr_debug("%s: Disabling COMP1\n", __func__);
-			snd_soc_update_bits(codec, TOMTOM_A_RX_HPH_L_GAIN,
-						0x20, 0x20);
-			snd_soc_update_bits(codec, TOMTOM_A_RX_HPH_R_GAIN,
-						0x20, 0x20);
-			snd_soc_update_bits(codec, TOMTOM_A_CDC_COMP1_B1_CTL,
-						0x03, 0x00);
-		}
-
 		wcd9xxx_clsh_fsm(codec, &tomtom_p->clsh_d,
 						 WCD9XXX_CLSH_STATE_EAR,
 						 WCD9XXX_CLSH_REQ_ENABLE,
@@ -7421,7 +7278,6 @@ static int tomtom_handle_pdata(struct tomtom_priv *tomtom)
 	u8 anc_ctl_value = 0;
 	u32 def_dmic_rate;
 	u16 tx_dmic_ctl_reg;
-	u8 spkdrv_ocp_curr_limit_val;
 
 	if (!pdata) {
 		pr_err("%s: NULL pdata\n", __func__);
@@ -7620,15 +7476,6 @@ static int tomtom_handle_pdata(struct tomtom_priv *tomtom)
 		0x1, anc_ctl_value);
 	snd_soc_update_bits(codec, TOMTOM_A_CDC_ANC2_B2_CTL,
 		0x1, anc_ctl_value);
-
-	spkdrv_ocp_curr_limit_val = tomtom_get_spkdrv_ocp_curr_limit_val(
-					tomtom->codec,
-					pdata->ocp.spkdrv_ocp_curr_limit);
-	snd_soc_update_bits(codec, TOMTOM_A_SPKR_DRV1_OCP_CTL,
-		0xF, spkdrv_ocp_curr_limit_val);
-	snd_soc_update_bits(codec, TOMTOM_A_SPKR_DRV2_OCP_CTL,
-		0xF, spkdrv_ocp_curr_limit_val);
-
 done:
 	return rc;
 }
@@ -8083,7 +7930,10 @@ static int wcd9xxx_prepare_static_pa(struct wcd9xxx_mbhc *mbhc,
 		{WCD9XXX_A_BUCK_MODE_2, 0xff, 0xEF},
 		{WCD9XXX_A_BUCK_MODE_2, 0xff, 0xEE},
 		{TOMTOM_A_NCP_DTEST, 0xff, 0x20},
+#ifdef CONFIG_MACH_LGE
+#else
 		{WCD9XXX_A_CDC_CLK_OTHR_CTL, 0xff, 0x21},
+#endif
 		{WCD9XXX_A_CDC_RX2_B6_CTL, 0xff, 0x81},
 		{WCD9XXX_A_CDC_CLK_RX_B1_CTL, 0x02, 0x02},
 

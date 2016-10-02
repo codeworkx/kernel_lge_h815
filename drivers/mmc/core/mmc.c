@@ -615,6 +615,12 @@ static int mmc_compare_ext_csds(struct mmc_card *card, unsigned bus_width)
 	err = mmc_get_ext_csd(card, &bw_ext_csd);
 
 	if (err || bw_ext_csd == NULL) {
+		#ifdef CONFIG_MACH_LGE
+		/* LGE_CHANGE, 2014-09-01, Z2G4-BSP-FileSys@lge.com
+		* Adding Print, Requested by QMC-CASE-01158823
+		*/
+		pr_err("%s: %s: 0x%x, 0x%x\n", mmc_hostname(card->host), __func__, err, bw_ext_csd ? *bw_ext_csd : 0x0);
+		#endif
 		err = -EINVAL;
 		goto out;
 	}
@@ -654,8 +660,19 @@ static int mmc_compare_ext_csds(struct mmc_card *card, unsigned bus_width)
 			bw_ext_csd[EXT_CSD_SEC_CNT + 2]) &&
 		(card->ext_csd.raw_sectors[3] ==
 			bw_ext_csd[EXT_CSD_SEC_CNT + 3]));
+
+	#ifdef CONFIG_MACH_LGE
+	/* LGE_CHANGE, 2014-09-01, Z2G4-BSP-FileSys@lge.com
+	* Adding Print, Requested by QMC-CASE-01158823
+	*/
+	if (err) {
+		pr_err("%s: %s: fail during compare, err = 0x%x\n", mmc_hostname(card->host), __func__, err);
+		err = -EINVAL;
+	}
+	#else
 	if (err)
 		err = -EINVAL;
+	#endif
 
 out:
 	mmc_free_ext_csd(bw_ext_csd);
@@ -777,8 +794,15 @@ static int mmc_select_powerclass(struct mmc_card *card,
 				EXT_CSD_PWR_CL_200_360;
 		break;
 	default:
+		#ifdef CONFIG_MACH_LGE
+		/* LGE_CHANGE, 2014-09-01, Z2G4-BSP-FileSys@lge.com
+		* Adding Print, Requested by QMC-CASE-01158823
+		*/
+		pr_err("%s: %s: Voltage range not supported for power class, host->ios.vdd = 0x%x\n", mmc_hostname(host), __func__, host->ios.vdd);
+		#else
 		pr_warning("%s: Voltage range not supported "
 			   "for power class.\n", mmc_hostname(host));
+		#endif
 		return -EINVAL;
 	}
 
@@ -1440,12 +1464,18 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 					mmc_hostname(host), __func__, err);
 			goto free_card;
 		}
+#ifndef CONFIG_MACH_LGE
+		/* LGE_CHANGE
+		 *  ext_csd.rev value are required while decoding cid.year, so move down.
+		 *  2014-09-01, Z2G4-BSP-FileSys@lge.com
+		 */
 		err = mmc_decode_cid(card);
 		if (err) {
 			pr_err("%s: %s: mmc_decode_cid() fails %d\n",
 					mmc_hostname(host), __func__, err);
 			goto free_card;
 		}
+#endif
 	}
 
 	/*
@@ -1478,6 +1508,18 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 					mmc_hostname(host), __func__, err);
 			goto free_card;
 		}
+#ifdef CONFIG_MACH_LGE
+		/* LGE_CHANGE
+		 * decode cid here.
+		 * 2014-09-01, Z2G4-BSP-FileSys@lge.com
+		 */
+		err = mmc_decode_cid(card);
+		if (err) {
+			pr_err("%s: %s: mmc_decode_cid() fails %d\n",
+					mmc_hostname(host), __func__, err);
+			goto free_card;
+		}
+#endif
 
 		/* If doing byte addressing, check if required to do sector
 		 * addressing.  Handle the case of <2GB cards needing sector
@@ -1853,14 +1895,6 @@ static int mmc_suspend(struct mmc_host *host)
 }
 
 /*
- * Shutdown callback
- */
-static int mmc_shutdown(struct mmc_host *host)
-{
-	return _mmc_suspend(host, false);
-}
-
-/*
  * Resume callback from host.
  *
  * This function tries to determine if the same card is still present
@@ -1985,7 +2019,6 @@ static const struct mmc_bus_ops mmc_ops = {
 	.power_restore = mmc_power_restore,
 	.alive = mmc_alive,
 	.change_bus_speed = mmc_change_bus_speed,
-	.shutdown = mmc_shutdown,
 };
 
 static const struct mmc_bus_ops mmc_ops_unsafe = {
@@ -1998,7 +2031,6 @@ static const struct mmc_bus_ops mmc_ops_unsafe = {
 	.power_restore = mmc_power_restore,
 	.alive = mmc_alive,
 	.change_bus_speed = mmc_change_bus_speed,
-	.shutdown = mmc_shutdown,
 };
 
 static void mmc_attach_bus_ops(struct mmc_host *host)

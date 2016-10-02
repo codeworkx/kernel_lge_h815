@@ -2469,9 +2469,9 @@ static int msm_hs_startup(struct uart_port *uport)
 					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 					"msm_hs_wakeup", msm_uport);
 		if (unlikely(ret)) {
-			MSM_HS_ERR("%s():Err getting uart wakeup_irq %d\n",
-				  __func__, ret);
-			goto unvote_exit;
+			MSM_HS_ERR("%s():Err getting uart wakeup_irq\n",
+				  __func__);
+			goto free_uart_irq;
 		}
 
 		msm_uport->wakeup.freed = false;
@@ -2489,7 +2489,7 @@ static int msm_hs_startup(struct uart_port *uport)
 	ret = msm_hs_config_uart_gpios(uport);
 	if (ret) {
 		MSM_HS_ERR("Uart GPIO request failed\n");
-		goto deinit_ws;
+		goto deinit_uart_clk;
 	}
 
 	msm_hs_write(uport, UART_DM_DMEN, 0);
@@ -2592,11 +2592,10 @@ sps_disconnect_tx:
 	sps_disconnect(sps_pipe_handle_tx);
 unconfig_uart_gpios:
 	msm_hs_unconfig_uart_gpios(uport);
-deinit_ws:
-	wakeup_source_trash(&msm_uport->ws);
 free_uart_irq:
 	free_irq(uport->irq, msm_uport);
-unvote_exit:
+deinit_uart_clk:
+	wakeup_source_trash(&msm_uport->ws);
 	msm_hs_resource_unvote(msm_uport);
 	MSM_HS_ERR("%s(): Error return\n", __func__);
 	return ret;

@@ -164,7 +164,13 @@ static struct msm_bus_scale_pdata msm_cpp_bus_scale_data = {
 	qcmd;			 \
 })
 
+/*LGE_CHANGE S, change the trial count from 0 to 3, 2015-07-22, freeso.kim@lge.com*/
+#if 0 //qct original
 #define MSM_CPP_MAX_TIMEOUT_TRIAL 0
+#else
+#define MSM_CPP_MAX_TIMEOUT_TRIAL 3
+#endif
+/*LGE_CHANGE E, change the trial count from 0 to 3, 2015-07-22, freeso.kim@lge.com*/
 
 struct msm_cpp_timer_data_t {
 	struct cpp_device *cpp_dev;
@@ -314,8 +320,8 @@ static void cpp_timer_callback(unsigned long data);
 
 uint8_t induce_error;
 static int msm_cpp_enable_debugfs(struct cpp_device *cpp_dev);
-
-static void msm_cpp_write(u32 data, void __iomem *cpp_base)
+/* LGE_CHANGE, camera stability task, Changed to inline function for RTB logging */
+static inline void msm_cpp_write(u32 data, void __iomem *cpp_base)
 {
 	writel_relaxed((data), cpp_base + MSM_CPP_MICRO_FIFO_RX_DATA);
 }
@@ -2701,7 +2707,7 @@ STREAM_BUFF_END:
 			&buff_mgr_info);
 		if (rc < 0) {
 			rc = -EAGAIN;
-			pr_err_ratelimited("error getting buffer rc:%d\n", rc);
+			pr_err("error getting buffer rc:%d\n", rc);
 			break;
 		}
 		buff_mgr_info.frame_id = frame_info.frame_id;
